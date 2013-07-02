@@ -880,7 +880,9 @@ private:
         OMX_QCOM_PLATFORM_PRIVATE_ENTRY     m_platform_entry_client[MAX_COUNT];
         OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO m_pmem_info_client[MAX_COUNT];
         OMX_BUFFERHEADERTYPE  m_out_mem_ptr_client[MAX_COUNT];
+#ifdef USE_ION
         struct vdec_ion op_buf_ion_info[MAX_COUNT];
+#endif
         unsigned char *pmem_baseaddress[MAX_COUNT];
         int pmem_fd[MAX_COUNT];
         struct vidc_heap

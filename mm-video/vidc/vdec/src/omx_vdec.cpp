@@ -9588,7 +9588,9 @@ void omx_vdec::allocate_color_convert_buf::init_members() {
   memset(m_platform_entry_client,0,sizeof(m_platform_entry_client));
   memset(m_pmem_info_client,0,sizeof(m_pmem_info_client));
   memset(m_out_mem_ptr_client,0,sizeof(m_out_mem_ptr_client));
+#ifdef USE_ION
   memset(op_buf_ion_info,0,sizeof(m_platform_entry_client));
+#endif
   for (int i = 0; i < MAX_COUNT;i++)
     pmem_fd[i] = -1;
 }
@@ -9781,7 +9783,9 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::free_output_buffer(
     close(pmem_fd[index]);
   }
   pmem_fd[index] = -1;
+#ifdef USE_ION
   omx->free_ion_memory(&op_buf_ion_info[index]);
+#endif
   m_heap_ptr[index].video_heap_ptr = NULL;
   if (allocated_count > 0)
     allocated_count--;
@@ -9831,6 +9835,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::allocate_buffers_color_conve
     return OMX_ErrorUndefined;
   }
   unsigned int i = allocated_count;
+#ifdef USE_ION
   op_buf_ion_info[i].ion_device_fd = omx->alloc_map_ion_memory(
     buffer_size_req,buffer_alignment_req,
     &op_buf_ion_info[i].ion_alloc_data,&op_buf_ion_info[i].fd_ion_data,
@@ -9841,13 +9846,44 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::allocate_buffers_color_conve
     DEBUG_PRINT_ERROR("\n alloc_map_ion failed in color_convert");
     return OMX_ErrorInsufficientResources;
   }
+#else
+    pmem_fd = open (MEM_DEVICE,O_RDWR);
+
+    if (pmem_fd < 0)
+    {
+      DEBUG_PRINT_ERROR("\n open failed for pmem/adsp for input buffer");
+      return OMX_ErrorInsufficientResources;
+    }
+
+    if (pmem_fd == 0)
+    {
+      pmem_fd = open (MEM_DEVICE,O_RDWR);
+
+      if (pmem_fd < 0)
+      {
+        DEBUG_PRINT_ERROR("\n open failed for pmem/adsp for input buffer");
+        return OMX_ErrorInsufficientResources;
+      }
+    }
+
+    if(!align_pmem_buffers(pmem_fd, drv_ctx.ip_buf.buffer_size,
+      drv_ctx.ip_buf.alignment))
+    {
+      DEBUG_PRINT_ERROR("\n align_pmem_buffers() failed");
+      close(pmem_fd);
+      return OMX_ErrorInsufficientResources;
+    }
+#endif
+
   pmem_baseaddress[i] = (unsigned char *)mmap(NULL,buffer_size_req,
                      PROT_READ|PROT_WRITE,MAP_SHARED,pmem_fd[i],0);
 
   if (pmem_baseaddress[i] == MAP_FAILED) {
     DEBUG_PRINT_ERROR("\n MMAP failed for Size %d",buffer_size_req);
     close(pmem_fd[i]);
+#ifdef USE_ION
     omx->free_ion_memory(&op_buf_ion_info[i]);
+#endif
     return OMX_ErrorInsufficientResources;
   }
   m_heap_ptr[i].video_heap_ptr = new VideoHeap (
